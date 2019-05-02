@@ -5,13 +5,24 @@
   <artifactId>JavaLogging</artifactId>
   <version>0.0.1-SNAPSHOT</version>
   <packaging>jar</packaging>
+  
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.source>1.8</maven.compiler.source>
     <maven.compiler.target>1.8</maven.compiler.target>
+    <mssql-jdbc.version>7.2.1.jre8</mssql-jdbc.version>
+    <sql.db.test>JavaLoggingTest</sql.db.test>
+    <sql.user.test>test</sql.user.test>
+    <sql.pw.test>test</sql.pw.test>
+    <sql.url.test>jdbc:sqlserver://localhost</sql.url.test>
   </properties>
     
   <dependencies>
+    <dependency>
+      <groupId>com.microsoft.sqlserver</groupId>
+      <artifactId>mssql-jdbc</artifactId>
+      <version>${mssql-jdbc.version}</version> 
+    </dependency>
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-core</artifactId>
@@ -35,4 +46,76 @@
       <type>jar</type>
     </dependency>
   </dependencies>
+   
+  <profiles>
+    <profile>
+      <id>refresh-db</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>sql-maven-plugin</artifactId>
+            <version>1.5</version>
+            <dependencies>
+              <dependency>
+                <groupId>com.microsoft.sqlserver</groupId>
+                <artifactId>mssql-jdbc</artifactId>
+                <version>${mssql-jdbc.version}</version> 
+              </dependency>
+            </dependencies>
+            <configuration>
+              <driver>com.microsoft.sqlserver.jdbc.SQLServerDriver</driver>
+              <url>${sql.url.test}</url>
+              <username>${sql.user.test}</username>
+              <password>${sql.pw.test}</password>
+            </configuration>
+            <executions>
+              <execution>
+                <id>create-db</id>
+                <phase>initialize</phase>
+                <goals>
+                  <goal>execute</goal>
+                </goals>
+                <configuration>
+                  <autocommit>true</autocommit>
+                  <sqlCommand>IF db_id(N'${sql.db.test}') IS NULL CREATE DATABASE ${sql.db.test} COLLATE Latin1_General_CS_AS</sqlCommand>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          
+          <plugin>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-maven-plugin</artifactId>
+            <version>5.1.4</version>
+            <configuration>
+              <serverId>test-server-id</serverId>
+              <url>${sql.url.test};databaseName=${sql.db.test}</url>
+              <baselineOnMigrate>true</baselineOnMigrate>
+              <baselineVersion>0</baselineVersion>
+              <user>${sql.user.test}</user>
+              <password>${sql.pw.test}</password>
+            </configuration>
+            <executions>
+              <execution>
+                <phase>test-compile</phase>
+                <goals>
+                  <goal>migrate</goal>
+                </goals>
+              </execution>
+            </executions>
+            <dependencies>
+              <dependency>
+                <groupId>com.microsoft.sqlserver</groupId>
+                <artifactId>mssql-jdbc</artifactId>
+                <version>${mssql-jdbc.version}</version> 
+              </dependency>
+            </dependencies>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+     
+  </profiles>
+  
 </project>

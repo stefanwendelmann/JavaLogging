@@ -24,8 +24,8 @@ public class LoggerTest
   public void testProfiling() throws InterruptedException
   {
     logg.traceEntry();
-    int runs = 1_000;
-    int logs = 2;
+    int runs = 10;
+    int logs = 1;
     int threadPoolSize = 8;
     logg.debug("Start Test mit " + runs + " durchläufen & " + logs + " logs & " + threadPoolSize + " ThreadPool");
     ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(threadPoolSize);
@@ -49,6 +49,7 @@ public class LoggerTest
 
     String allSicherungsVerzeichnis = "target/sicherungsverzeichnis/";
 
+    // Global Unique ID 
     public String laufId;
     public int logs;
 
@@ -116,6 +117,7 @@ public class LoggerTest
       }
 
       // Logger säubern
+      config.removeLogger(laufId);
       fullAppender.stop();
       loggerConfig.stop();
       ctx.updateLoggers();
