@@ -72,7 +72,7 @@ public class LoggerTest
   }
 
   @Test
-  public void testProfiling() throws InterruptedException
+  public void testProgrThreadedLogs() throws InterruptedException, SQLException
   {
     logg.traceEntry();
     int runs = 10;
@@ -92,6 +92,19 @@ public class LoggerTest
     {
 //      logg.info("Not Ready yet ");
     }
+
+    // Check result
+    Statement s = con.createStatement();
+    ResultSet rs = s.executeQuery("SELECT * FROM LAUFLOG WHERE SCHNITTSTELLE = 'LISA4711'");
+
+    int actualCount = 0;
+    while (rs.next())
+    {
+      actualCount++;
+    }
+
+    // Number of Results = runs * logs * 2 for log.info & log.warn in Task.run()
+    Assert.assertEquals(runs * logs * 2, actualCount);
     logg.traceExit();
   }
 
