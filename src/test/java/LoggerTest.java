@@ -75,7 +75,7 @@ public class LoggerTest
   public void testProgrThreadedLogs() throws InterruptedException, SQLException
   {
     logg.traceEntry();
-    int runs = 10;
+    int runs = 100;
     int logs = 1;
     int threadPoolSize = 8;
     logg.debug("Start Test mit " + runs + " durchläufen & " + logs + " logs & " + threadPoolSize + " ThreadPool");
@@ -128,7 +128,7 @@ public class LoggerTest
     {
       Configuration config = ctx.getConfiguration();
 
-      //File Appender aufbauen <laufid>_file
+      // Build a new File Appender
       File laufLogFile = new File(allSicherungsVerzeichnis + laufId + "_log4j.log");
 
       Layout layout = PatternLayout.newBuilder()
@@ -150,15 +150,15 @@ public class LoggerTest
       fullAppender.start();
       config.addAppender(fullAppender);
 
-      // Logger Referenzen aufbauen
-      AppenderRef refDB = AppenderRef.createAppenderRef("Lauflog", Level.ALL, null); // HIER LOGLEVEL DB EINSTELLEN
-      AppenderRef refFile = AppenderRef.createAppenderRef(laufId + "_FILE", Level.ALL, null); // HIER LOGLEVEL Datei einstellen
+      // Build Appender Refs 
+      AppenderRef refDB = AppenderRef.createAppenderRef("Lauflog", Level.ALL, null); // Config Lauflog (DB) Loglevel here 
+      AppenderRef refFile = AppenderRef.createAppenderRef(laufId + "_FILE", Level.ALL, null); // Config FileAppender Loglevel here
       AppenderRef[] refs = new AppenderRef[]
       {
         refDB, refFile
       };
 
-      // Logger Aufbauen
+      // Build Logger
       LoggerConfig loggerConfig = LoggerConfig
         .createLogger(false, Level.ALL, laufId, "true", refs, null, config, null);
       loggerConfig.addAppender(fullAppender, Level.ALL, null); // HIER LOGLEVEL Datei einstellen
@@ -167,7 +167,7 @@ public class LoggerTest
 
       ctx.updateLoggers();
 
-      org.apache.logging.log4j.Logger log = LogManager.getLogger(laufId);
+     Logger log = LogManager.getLogger(laufId);
 
       ThreadContext.put("schnittstelle", "LISA4711");
       ThreadContext.put("version", "L01");
@@ -179,10 +179,11 @@ public class LoggerTest
         log.warn("Ich bin ein böser warning und soll in das FullFile und in die DB");
       }
 
-      // Logger säubern
-      config.removeLogger(laufId);
+      // Clean Logger
       fullAppender.stop();
+      loggerConfig.removeAppender(laufId+"_FILE");
       loggerConfig.stop();
+      config.removeLogger(laufId);
       ctx.updateLoggers();
       ThreadContext.clearAll();
     }
