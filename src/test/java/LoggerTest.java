@@ -37,7 +37,7 @@ public class LoggerTest
       executor.execute(t);
     }
     executor.shutdown();
-    while (!executor.awaitTermination(100L, TimeUnit.MINUTES))
+    while (!executor.awaitTermination(100L, TimeUnit.MILLISECONDS))
     {
 //      logg.info("Not Ready yet ");
     }
