@@ -6,7 +6,7 @@
     </Console>
     
     <JDBC name="Lauflog" tableName="LAUFLOG">
-      <DriverManager connectionString="jdbc:sqlserver://localhost;databaseName=SPortal;schema=dbo" 
+      <DriverManager connectionString="jdbc:sqlserver://localhost;databaseName=JavaLoggingTest;schema=dbo" 
         driverClassName="com.microsoft.sqlserver.jdbc.SQLServerDriver"
         username="test" 
         password="test" />

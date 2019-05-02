@@ -46,6 +46,27 @@
       <type>jar</type>
     </dependency>
   </dependencies>
+  
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>properties-maven-plugin</artifactId>
+        <version>1.0.0</version>
+        <executions>
+          <execution>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>write-project-properties</goal>
+            </goals>
+            <configuration>
+              <outputFile>${project.build.outputDirectory}/mvn.properties</outputFile>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
    
   <profiles>
     <profile>
@@ -100,6 +121,7 @@
               <execution>
                 <phase>test-compile</phase>
                 <goals>
+                  <goal>clean</goal>
                   <goal>migrate</goal>
                 </goals>
               </execution>
