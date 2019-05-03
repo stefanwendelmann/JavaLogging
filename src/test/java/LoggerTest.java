@@ -1,5 +1,6 @@
 
 import java.io.*;
+import java.net.*;
 import java.nio.charset.*;
 import java.nio.file.*;
 import java.sql.*;
@@ -11,6 +12,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.*;
 import org.apache.logging.log4j.core.appender.*;
 import org.apache.logging.log4j.core.config.*;
+import org.apache.logging.log4j.core.impl.*;
 import org.apache.logging.log4j.core.layout.*;
 import org.junit.*;
 
@@ -20,15 +22,14 @@ import org.junit.*;
  */
 public class LoggerTest
 {
-
+  
   private static final org.apache.logging.log4j.Logger logg = LogManager.getLogger();
-  private static final LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
   private static final String CHECKMD5 = "9f15ae8af42d9cddd35a69f9958ce73d";
   private static final String allSicherungsVerzeichnis = "target/sicherungsverzeichnis/";
-
+  
   private Properties mvnProperties;
   private Connection con = null;
-
+  
   @Before
   public void before() throws IOException, ClassNotFoundException, SQLException
   {
@@ -44,7 +45,7 @@ public class LoggerTest
       p.getProperty("sql.user.test"),
       p.getProperty("sql.pw.test"));
   }
-
+  
   @After
   public void after() throws SQLException
   {
@@ -53,37 +54,37 @@ public class LoggerTest
       con.close();
     }
   }
-
+  
   @Test
   public void testSingle() throws InterruptedException, SQLException
   {
     Logger log = LogManager.getLogger("Testlogger");
-
+    
     ThreadContext.put("schnittstelle", "SingleTest");
     ThreadContext.put("version", "S01");
     ThreadContext.put("laufid", "S00");
-
+    
     log.info("testSingle" + CHECKMD5);
     // Wait for Log4j to ASYNC log the message to the DB
     // May Fail due high latency!
     Thread.sleep(1_000L);
-
+    
     Statement s = con.createStatement();
     ResultSet rs = s.executeQuery("SELECT * FROM LAUFLOG WHERE TEXT = 'testSingle" + CHECKMD5 + "'");
-
+    
     Assert.assertTrue(rs.next());
   }
-
+  
   @Test
   public void testProgrThreadedLogs() throws InterruptedException, SQLException, IOException
   {
     logg.traceEntry();
-    int runs = 5_000;
+    int runs = 1;
     int logs = 1;
     int threadPoolSize = 8;
     logg.debug("Start Test mit " + runs + " durchläufen & " + logs + " logs & " + threadPoolSize + " ThreadPool");
     ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(threadPoolSize);
-
+    
     for (int i = 0; i < runs; i++)
     {
       String laufid = "LD0" + i;
@@ -99,7 +100,7 @@ public class LoggerTest
     // Check result
     Statement s = con.createStatement();
     ResultSet rs = s.executeQuery("SELECT * FROM LAUFLOG WHERE SCHNITTSTELLE = 'LISA4711'");
-
+    
     int actualCount = 0;
     while (rs.next())
     {
@@ -111,40 +112,56 @@ public class LoggerTest
 
     // Check the Logfiles created
     Assert.assertEquals(runs, new File(allSicherungsVerzeichnis).listFiles().length);
-    Assert.assertEquals((long)runs*(logs+1), Files.lines(Paths.get(allSicherungsVerzeichnis)).count());
+    Assert.assertEquals((long) runs * (logs + 1), Files.lines(Paths.get(allSicherungsVerzeichnis)).count());
     logg.traceExit();
   }
-
+  
   public class Task implements Runnable
   {
-
+    
     Level dbLevel = Level.ALL;
     Level fileLevel = Level.WARN;
+    private LoggerContext ctx;
 
     // Global Unique ID 
     public String laufId;
     public int logs;
-
+    
     public Task(String laufId, int logs)
     {
       this.laufId = laufId;
       this.logs = logs;
     }
-
+    
     @Override
     public void run()
     {
+      ThreadContext.put("schnittstelle", "LISA4711");
+      ThreadContext.put("version", "L01");
+      ThreadContext.put("laufid", laufId);
+      
+      ctx = (LoggerContext) LogManager.getContext(false);
+      ctx.reconfigure();
+      try( InputStream is = new FileInputStream(ctx.getConfiguration().getConfigurationSource().getFile()))
+      {
+        ctx.start(ConfigurationFactory.getInstance().getConfiguration(ctx, new ConfigurationSource(is)));
+      }
+      catch (IOException ex)
+      {
+        logg.fatal(ex.getMessage(), ex);
+      }
+      
       Configuration config = ctx.getConfiguration();
 
       // Build a new File Appender
       File laufLogFile = new File(allSicherungsVerzeichnis + laufId + "_log4j.log");
-
+      
       Layout layout = PatternLayout.newBuilder()
         .withConfiguration(config)
         .withPattern(PatternLayout.SIMPLE_CONVERSION_PATTERN)
         .withCharset(Charset.forName("UTF-8"))
         .build();
-
+      
       Appender fullAppender = FileAppender.newBuilder()
         .setConfiguration(config)
         .setName(laufId + "_FILE")
@@ -154,7 +171,7 @@ public class LoggerTest
         .setIgnoreExceptions(false)
         .setLayout(layout)
         .build();
-
+      
       fullAppender.start();
       config.addAppender(fullAppender);
 
@@ -172,34 +189,30 @@ public class LoggerTest
       loggerConfig.addAppender(fullAppender, fileLevel, null); // HIER LOGLEVEL Datei einstellen
       loggerConfig.addAppender(config.getAppender("Lauflog"), dbLevel, null); // HIER LOGLEVEL Datei einstellen
       config.addLogger(laufId, loggerConfig);
-
+      
       ctx.updateLoggers();
-
+      
       Logger log = LogManager.getLogger(laufId);
-
-      ThreadContext.put("schnittstelle", "LISA4711");
-      ThreadContext.put("version", "L01");
-      ThreadContext.put("laufid", laufId);
-
+      
       for (int j = 0; j < logs; j++)
       {
         log.info("Just a Info");
         log.warn("i warn you!");
       }
 
-      
       // Clean Logger
       fullAppender.stop();
       loggerConfig.stop();
-//      loggerConfig.removeAppender(laufId + "_FILE");
-//      config.getLoggerConfig(laufId).removeAppender(laufId + "_FILE");
-//      config.removeLogger(laufId);
-//      config.getRootLogger().removeAppender(laufId+"_FILE");
-//      ctx.updateLoggers();
+      loggerConfig.removeAppender(laufId + "_FILE");
+      config.getLoggerConfig(laufId).removeAppender(laufId + "_FILE");
+      config.removeLogger(laufId);
+      config.getRootLogger().removeAppender(laufId+"_FILE");
+      ctx.updateLoggers();
 //      ctx.reconfigure();
+      ctx.stop();
       ThreadContext.clearAll();
     }
-
+    
   }
-
+  
 }
