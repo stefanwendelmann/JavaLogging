@@ -111,7 +111,7 @@ public class LoggerTest
 
     // Check the Logfiles created
     Assert.assertEquals(runs, new File(allSicherungsVerzeichnis).listFiles().length);
-    Assert.assertEquals((long)runs*(logs+1), Files.lines(Paths.get(allSicherungsVerzeichnis)).count());
+    Assert.assertEquals((long) runs * (logs + 1), Files.lines(Paths.get(allSicherungsVerzeichnis)).count());
     logg.traceExit();
   }
 
@@ -187,15 +187,38 @@ public class LoggerTest
         log.warn("i warn you!");
       }
 
-      
       // Clean Logger
       fullAppender.stop();
+      try
+      {
+        while (((FileAppender) fullAppender).isStopping())
+        {
+          Thread.sleep(100L);
+        }
+      }
+      catch (InterruptedException ex)
+      {
+        logg.error(ex.getMessage(), ex);
+      }
+
       loggerConfig.stop();
-//      loggerConfig.removeAppender(laufId + "_FILE");
-//      config.getLoggerConfig(laufId).removeAppender(laufId + "_FILE");
-//      config.removeLogger(laufId);
-//      config.getRootLogger().removeAppender(laufId+"_FILE");
-//      ctx.updateLoggers();
+      try
+      {
+        while (loggerConfig.isStopping())
+        {
+          Thread.sleep(100L);
+        }
+      }
+      catch (InterruptedException ex)
+      {
+        logg.error(ex.getMessage(), ex);
+      }
+
+      loggerConfig.removeAppender(laufId + "_FILE");
+      config.getLoggerConfig(laufId).removeAppender(laufId + "_FILE");
+      config.removeLogger(laufId);
+      config.getRootLogger().removeAppender(laufId + "_FILE");
+      ctx.updateLoggers();
 //      ctx.reconfigure();
       ThreadContext.clearAll();
     }
