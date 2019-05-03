@@ -1,6 +1,7 @@
 
 import java.io.*;
 import java.nio.charset.*;
+import java.nio.file.*;
 import java.sql.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -19,13 +20,15 @@ import org.junit.*;
  */
 public class LoggerTest
 {
-  
+
   private static final org.apache.logging.log4j.Logger logg = LogManager.getLogger();
   private static final LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
   private static final String CHECKMD5 = "9f15ae8af42d9cddd35a69f9958ce73d";
+  private static final String allSicherungsVerzeichnis = "target/sicherungsverzeichnis/";
+
   private Properties mvnProperties;
   private Connection con = null;
-  
+
   @Before
   public void before() throws IOException, ClassNotFoundException, SQLException
   {
@@ -41,7 +44,7 @@ public class LoggerTest
       p.getProperty("sql.user.test"),
       p.getProperty("sql.pw.test"));
   }
-  
+
   @After
   public void after() throws SQLException
   {
@@ -50,37 +53,37 @@ public class LoggerTest
       con.close();
     }
   }
-  
+
   @Test
   public void testSingle() throws InterruptedException, SQLException
   {
     Logger log = LogManager.getLogger("Testlogger");
-    
+
     ThreadContext.put("schnittstelle", "SingleTest");
     ThreadContext.put("version", "S01");
     ThreadContext.put("laufid", "S00");
-    
+
     log.info("testSingle" + CHECKMD5);
     // Wait for Log4j to ASYNC log the message to the DB
     // May Fail due high latency!
     Thread.sleep(1_000L);
-    
+
     Statement s = con.createStatement();
     ResultSet rs = s.executeQuery("SELECT * FROM LAUFLOG WHERE TEXT = 'testSingle" + CHECKMD5 + "'");
-    
+
     Assert.assertTrue(rs.next());
   }
-  
+
   @Test
-  public void testProgrThreadedLogs() throws InterruptedException, SQLException
+  public void testProgrThreadedLogs() throws InterruptedException, SQLException, IOException
   {
     logg.traceEntry();
-    int runs = 100_000;
-    int logs = 10;
+    int runs = 5_000;
+    int logs = 1;
     int threadPoolSize = 8;
     logg.debug("Start Test mit " + runs + " durchläufen & " + logs + " logs & " + threadPoolSize + " ThreadPool");
     ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(threadPoolSize);
-    
+
     for (int i = 0; i < runs; i++)
     {
       String laufid = "LD0" + i;
@@ -96,7 +99,7 @@ public class LoggerTest
     // Check result
     Statement s = con.createStatement();
     ResultSet rs = s.executeQuery("SELECT * FROM LAUFLOG WHERE SCHNITTSTELLE = 'LISA4711'");
-    
+
     int actualCount = 0;
     while (rs.next())
     {
@@ -105,24 +108,29 @@ public class LoggerTest
 
     // Number of Results = runs * logs * 2 for log.info & log.warn in Task.run()
     Assert.assertEquals(runs * logs * 2, actualCount);
+
+    // Check the Logfiles created
+    Assert.assertEquals(runs, new File(allSicherungsVerzeichnis).listFiles().length);
+    Assert.assertEquals((long)runs*(logs+1), Files.lines(Paths.get(allSicherungsVerzeichnis)).count());
     logg.traceExit();
   }
-  
+
   public class Task implements Runnable
   {
-    
-    String allSicherungsVerzeichnis = "target/sicherungsverzeichnis/";
+
+    Level dbLevel = Level.ALL;
+    Level fileLevel = Level.WARN;
 
     // Global Unique ID 
     public String laufId;
     public int logs;
-    
+
     public Task(String laufId, int logs)
     {
       this.laufId = laufId;
       this.logs = logs;
     }
-    
+
     @Override
     public void run()
     {
@@ -130,13 +138,13 @@ public class LoggerTest
 
       // Build a new File Appender
       File laufLogFile = new File(allSicherungsVerzeichnis + laufId + "_log4j.log");
-      
+
       Layout layout = PatternLayout.newBuilder()
         .withConfiguration(config)
         .withPattern(PatternLayout.SIMPLE_CONVERSION_PATTERN)
         .withCharset(Charset.forName("UTF-8"))
         .build();
-      
+
       Appender fullAppender = FileAppender.newBuilder()
         .setConfiguration(config)
         .setName(laufId + "_FILE")
@@ -146,13 +154,13 @@ public class LoggerTest
         .setIgnoreExceptions(false)
         .setLayout(layout)
         .build();
-      
+
       fullAppender.start();
       config.addAppender(fullAppender);
 
       // Build Appender Refs 
-      AppenderRef refDB = AppenderRef.createAppenderRef("Lauflog", Level.ALL, null); // Config Lauflog (DB) Loglevel here 
-      AppenderRef refFile = AppenderRef.createAppenderRef(laufId + "_FILE", Level.ALL, null); // Config FileAppender Loglevel here
+      AppenderRef refDB = AppenderRef.createAppenderRef("Lauflog", dbLevel, null); // Config Lauflog (DB) Loglevel here 
+      AppenderRef refFile = AppenderRef.createAppenderRef(laufId + "_FILE", fileLevel, null); // Config FileAppender Loglevel here
       AppenderRef[] refs = new AppenderRef[]
       {
         refDB, refFile
@@ -161,35 +169,37 @@ public class LoggerTest
       // Build Logger
       LoggerConfig loggerConfig = LoggerConfig
         .createLogger(false, Level.ALL, laufId, "true", refs, null, config, null);
-      loggerConfig.addAppender(fullAppender, Level.ALL, null); // HIER LOGLEVEL Datei einstellen
-      loggerConfig.addAppender(config.getAppender("Lauflog"), Level.ALL, null); // HIER LOGLEVEL Datei einstellen
+      loggerConfig.addAppender(fullAppender, fileLevel, null); // HIER LOGLEVEL Datei einstellen
+      loggerConfig.addAppender(config.getAppender("Lauflog"), dbLevel, null); // HIER LOGLEVEL Datei einstellen
       config.addLogger(laufId, loggerConfig);
-      
+
       ctx.updateLoggers();
-      
+
       Logger log = LogManager.getLogger(laufId);
-      
+
       ThreadContext.put("schnittstelle", "LISA4711");
       ThreadContext.put("version", "L01");
       ThreadContext.put("laufid", laufId);
-      
+
       for (int j = 0; j < logs; j++)
       {
-        log.info("Ich bin nur eine Info und soll nur in das FullFile logging!");
-        log.warn("Ich bin ein böser warning und soll in das FullFile und in die DB");
+        log.info("Just a Info");
+        log.warn("i warn you!");
       }
+
       
       // Clean Logger
       fullAppender.stop();
-      loggerConfig.removeAppender(laufId + "_FILE");
       loggerConfig.stop();
-      config.getLoggerConfig(laufId).removeAppender(laufId+"_FILE");
-      config.removeLogger(laufId);
-      config.getRootLogger().removeAppender(laufId+"_FILE");
-      ctx.updateLoggers();
+//      loggerConfig.removeAppender(laufId + "_FILE");
+//      config.getLoggerConfig(laufId).removeAppender(laufId + "_FILE");
+//      config.removeLogger(laufId);
+//      config.getRootLogger().removeAppender(laufId+"_FILE");
+//      ctx.updateLoggers();
+//      ctx.reconfigure();
       ThreadContext.clearAll();
     }
-    
+
   }
-  
+
 }
