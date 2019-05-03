@@ -22,9 +22,9 @@ public class LoggerTest
 {
 
   private static final org.apache.logging.log4j.Logger logg = LogManager.getLogger();
-  private static final LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
   private static final String CHECKMD5 = "9f15ae8af42d9cddd35a69f9958ce73d";
   private static final String allSicherungsVerzeichnis = "target/sicherungsverzeichnis/";
+  private static final LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
 
   private Properties mvnProperties;
   private Connection con = null;
@@ -111,7 +111,7 @@ public class LoggerTest
 
     // Check the Logfiles created
     Assert.assertEquals(runs, new File(allSicherungsVerzeichnis).listFiles().length);
-    Assert.assertEquals((long)runs*(logs+1), Files.lines(Paths.get(allSicherungsVerzeichnis)).count());
+    Assert.assertEquals((long) runs * (logs + 1), Files.lines(Paths.get(allSicherungsVerzeichnis)).count());
     logg.traceExit();
   }
 
@@ -187,16 +187,12 @@ public class LoggerTest
         log.warn("i warn you!");
       }
 
-      
       // Clean Logger
-      fullAppender.stop();
-      loggerConfig.stop();
-//      loggerConfig.removeAppender(laufId + "_FILE");
-//      config.getLoggerConfig(laufId).removeAppender(laufId + "_FILE");
-//      config.removeLogger(laufId);
-//      config.getRootLogger().removeAppender(laufId+"_FILE");
-//      ctx.updateLoggers();
-//      ctx.reconfigure();
+      ctx.getConfiguration().getAppender(laufId + "_FILE").stop();
+      ctx.getConfiguration().removeLogger(laufId);
+      config.getLoggerConfig(laufId).removeAppender(laufId + "_FILE");
+      config.getLoggerConfig(laufId).stop();
+      ctx.updateLoggers();
       ThreadContext.clearAll();
     }
 
